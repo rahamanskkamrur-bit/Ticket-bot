@@ -9,10 +9,13 @@ from discord.ext import commands
 # 1. BOT CONFIGURATION
 # =====================================================================
 
-BOT_TOKEN = os.getenv("BOT_TOKEN")
+# Render will read this from your Environment Variables (Key: BOT_TOKEN)
+BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 
 STAFF_ROLE_IDS = [1567026563369664590]
 TICKET_CATEGORY_ID = 1567026565483859991
+
+BOT_STATUS = "Starting up..."
 
 TICKET_TYPES = {
     "support": {
@@ -51,7 +54,7 @@ TICKET_TYPES = {
 # =====================================================================
 
 async def handle_ping(request):
-    return web.Response(text="Bot is running and online!")
+    return web.Response(text=f"Render Web Service is running!\nDiscord Bot Status: {BOT_STATUS}")
 
 async def run_web_server():
     app = web.Application()
@@ -61,7 +64,7 @@ async def run_web_server():
     port = int(os.environ.get("PORT", 10000))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
-    print(f"🌐 Keep-alive web server successfully bound to port {port}")
+    print(f"🌐 Keep-alive web server bound to port {port}")
 
 
 # =====================================================================
@@ -321,26 +324,6 @@ class TicketPanelView(discord.ui.View):
 # 5. BOT SETUP & CONCURRENT STARTUP
 # =====================================================================
 
-class TicketBot(commands.Bot):
-    def __init__(self):
-        intents = discord.Intents.default()
-        intents.message_content = True
-        super().__init__(command_prefix="!", intents=intents)
-
-    async def setup_hook(self):
-        self.add_view(TicketPanelView())
-        self.add_view(TicketControlView())
-        await self.tree.sync()
-
-
-bot = TicketBot()
-
-
-@bot.event
-async def on_ready():
-    print(f"✅ SUCCESS! Bot is ONLINE as: {bot.user}")
-
-
 def create_panel_embed() -> discord.Embed:
     embed = discord.Embed(
         title="📬 Server Support & Tickets",
@@ -357,31 +340,73 @@ def create_panel_embed() -> discord.Embed:
     return embed
 
 
-@bot.command(name="panel")
-async def send_panel(ctx: commands.Context):
-    await ctx.send(embed=create_panel_embed(), view=TicketPanelView())
-    try:
-        await ctx.message.delete()
-    except discord.Forbidden:
-        pass
+class TicketBot(commands.Bot):
+    def __init__(self, use_message_content: bool = True):
+        intents = discord.Intents.default()
+        intents.message_content = use_message_content
+        super().__init__(command_prefix="!", intents=intents)
+
+    async def setup_hook(self):
+        self.add_view(TicketPanelView())
+        self.add_view(TicketControlView())
+        await self.tree.sync()
+
+    async def on_ready(self):
+        global BOT_STATUS
+        BOT_STATUS = f"ONLINE as {self.user} (ID: {self.user.id})"
+        print(f"✅ SUCCESS! Bot is ONLINE as: {self.user}")
 
 
-@bot.tree.command(name="panel", description="Post the 4-button ticket panel in this channel")
-async def slash_panel(interaction: discord.Interaction):
-    await interaction.channel.send(embed=create_panel_embed(), view=TicketPanelView())
-    await interaction.response.send_message("✅ Ticket panel posted!", ephemeral=True)
+def register_commands(bot_instance: TicketBot):
+    @bot_instance.command(name="panel")
+    async def send_panel(ctx: commands.Context):
+        await ctx.send(embed=create_panel_embed(), view=TicketPanelView())
+        try:
+            await ctx.message.delete()
+        except discord.Forbidden:
+            pass
+
+    @bot_instance.tree.command(name="panel", description="Post the 4-button ticket panel in this channel")
+    async def slash_panel(interaction: discord.Interaction):
+        await interaction.channel.send(embed=create_panel_embed(), view=TicketPanelView())
+        await interaction.response.send_message("✅ Ticket panel posted!", ephemeral=True)
 
 
 async def main():
-    if not BOT_TOKEN:
-        print("❌ ERROR: BOT_TOKEN environment variable is missing on Render!")
-        return
-
+    global BOT_STATUS
     # Start the web server first so Render registers the port immediately
     await run_web_server()
-    
-    # Then start the Discord bot concurrently
-    await bot.start(BOT_TOKEN.strip())
+
+    if not BOT_TOKEN:
+        BOT_STATUS = "ERROR: BOT_TOKEN environment variable is missing in Render!"
+        print(f"❌ {BOT_STATUS}")
+        while True:
+            await asyncio.sleep(3600)
+
+    # First try logging in with message_content intent enabled
+    bot = TicketBot(use_message_content=True)
+    register_commands(bot)
+
+    try:
+        print("🔄 Connecting to Discord...")
+        await bot.start(BOT_TOKEN)
+    except discord.PrivilegedIntentsRequired:
+        print("⚠️ Message Content Intent not enabled in Developer Portal. Falling back to default intents (Slash command /panel will still work!)...")
+        await bot.close()
+        bot = TicketBot(use_message_content=False)
+        register_commands(bot)
+        await bot.start(BOT_TOKEN)
+    except discord.LoginFailure:
+        BOT_STATUS = "ERROR: Invalid Bot Token! Discord resets tokens that are uploaded to public GitHub repos."
+        print(f"❌ {BOT_STATUS}")
+        print("👉 FIX: Go to Discord Developer Portal -> Bot -> Reset Token, copy the new token, and paste it into Render's Environment Variables!")
+        while True:
+            await asyncio.sleep(3600)
+    except Exception as e:
+        BOT_STATUS = f"ERROR: {type(e).__name__}: {e}"
+        print(f"❌ {BOT_STATUS}")
+        while True:
+            await asyncio.sleep(3600)
 
 
 if __name__ == "__main__":
