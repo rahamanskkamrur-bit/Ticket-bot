@@ -1,5 +1,6 @@
-
 import asyncio
+import os
+from aiohttp import web
 import discord
 from discord.ext import commands
 
@@ -7,8 +8,8 @@ from discord.ext import commands
 # 1. BOT CONFIGURATION
 # =====================================================================
 
-# PASTE YOUR TOKEN INSIDE THE QUOTES BELOW:
-BOT_TOKEN = "MTU2NjgwNzcwMjA5OTg1MzMyMQ.GPBsbn.oz7fjNMgdIrz3k93SbRDn0dCkEIZc5N5nFQBaw"
+# Fetches your token securely from Render's Environment Variables
+BOT_TOKEN = os.getenv("BOT_TOKEN", "MTU2NjgwNzcwMjA5OTg1MzMyMQ.GPBsbn.oz7fjNMgdIrz3k93SbRDn0dCkEIZc5N5nFQBaw")
 
 # Your Staff Role ID (1567026563369664590)
 STAFF_ROLE_IDS = [1567026563369664590]
@@ -50,7 +51,24 @@ TICKET_TYPES = {
 
 
 # =====================================================================
-# 2. INSIDE-TICKET CONTROLS (Claim & Close Buttons)
+# 2. KEEP-ALIVE WEB SERVER (Required for Render Web Services)
+# =====================================================================
+
+async def handle_ping(request):
+    return web.Response(text="Bot is running!")
+
+async def start_web_server():
+    app = web.Application()
+    app.router.add_get("/", handle_ping)
+    runner = web.AppRunner(app)
+    await runner.setup()
+    port = int(os.environ.get("PORT", 10000))
+    site = web.TCPSite(runner, "0.0.0.0", port)
+    await site.start()
+
+
+# =====================================================================
+# 3. INSIDE-TICKET CONTROLS (Claim & Close Buttons)
 # =====================================================================
 
 class TicketControlView(discord.ui.View):
@@ -64,7 +82,6 @@ class TicketControlView(discord.ui.View):
         return any(role.id in STAFF_ROLE_IDS for role in member.roles)
 
     async def safe_reply(self, interaction: discord.Interaction, text: str):
-        """Replies safely even if Android background lag caused the 3s interaction token to expire."""
         try:
             if not interaction.response.is_done():
                 await interaction.response.send_message(text, ephemeral=True)
@@ -84,9 +101,7 @@ class TicketControlView(discord.ui.View):
             await self.safe_reply(interaction, "❌ Only staff members can claim tickets.")
             return
 
-        # Lock prevents two staff members from claiming at the exact same millisecond
         async with self._claim_lock:
-            # Fetch fresh message state so simultaneous clicks or expired interactions never fail
             try:
                 msg = await interaction.channel.fetch_message(interaction.message.id)
             except Exception:
@@ -149,7 +164,7 @@ class TicketControlView(discord.ui.View):
 
 
 # =====================================================================
-# 3. MAIN TICKET PANEL (4 Category Buttons)
+# 4. MAIN TICKET PANEL (4 Category Buttons)
 # =====================================================================
 
 class TicketPanelView(discord.ui.View):
@@ -157,8 +172,6 @@ class TicketPanelView(discord.ui.View):
         super().__init__(timeout=None)
 
     async def open_ticket(self, interaction: discord.Interaction, type_key: str):
-        # Try to defer within 3 seconds; if Android paused Pydroid and the token expired (10062),
-        # do NOT crash — continue creating the ticket channel anyway!
         interaction_valid = True
         try:
             await interaction.response.defer(ephemeral=True)
@@ -218,7 +231,6 @@ class TicketPanelView(discord.ui.View):
 
         channel_name = f"{config['prefix']}-{user.name.lower()}"
 
-        # Retry helper to survive Android background connection drops ([Errno 103])
         ticket_channel = None
         for attempt in range(3):
             try:
@@ -246,7 +258,6 @@ class TicketPanelView(discord.ui.View):
 
         pings_str = " ".join(role_mentions)
 
-        # Retry sending the welcome embed up to 3 times if Android resets the socket
         for attempt in range(3):
             try:
                 await ticket_channel.send(
@@ -310,7 +321,7 @@ class TicketPanelView(discord.ui.View):
 
 
 # =====================================================================
-# 4. BOT SETUP & COMMANDS (!panel and /panel)
+# 5. BOT SETUP & STARTUP
 # =====================================================================
 
 class TicketBot(commands.Bot):
@@ -321,8 +332,10 @@ class TicketBot(commands.Bot):
 
     async def setup_hook(self):
         self.add_view(TicketPanelView())
-        self.add_view(TicketControlView())
+        self.add_view(TicketControlGroup := TicketControlView())
         await self.tree.sync()
+        # Start the web server concurrently so Render stays happy
+        await start_web_server()
 
 
 bot = TicketBot()
