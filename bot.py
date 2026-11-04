@@ -8,7 +8,7 @@ from discord.ext import commands
 # =====================================================================
 
 # PASTE YOUR TOKEN INSIDE THE QUOTES BELOW:
-BOT_TOKEN = "MTU2NjgwNzcwMjA5OTg1MzMyMQ.GntaH6.MRIUKeiEaomh7Y8wYo-Cr4S7VPnmGYmIYbJ4h4"
+BOT_TOKEN = "MTU2NjgwNzcwMjA5OTg1MzMyMQ.GPBsbn.oz7fjNMgdIrz3k93SbRDn0dCkEIZc5N5nFQBaw"
 
 # Your Staff Role ID (1567026563369664590)
 STAFF_ROLE_IDS = [1567026563369664590]
