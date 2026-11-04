@@ -365,7 +365,7 @@ async def slash_panel(interaction: discord.Interaction):
 
 
 clean_token = BOT_TOKEN.strip()
-if not clean_token or clean_token == "PASTE_YOUR_BOT_TOKEN_HERE":
+if not clean_token or clean_token == "MTU2NjgwNzcwMjA5OTg1MzMyMQ.GPBsbn.oz7fjNMgdIrz3k93SbRDn0dCkEIZc5N5nFQBaw":
     print("❌ ERROR: You forgot to paste your Discord Bot Token on Line 10!")
 else:
     bot.run(clean_token)
