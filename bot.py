@@ -1,3 +1,4 @@
+
 import asyncio
 import os
 from aiohttp import web
@@ -9,7 +10,7 @@ from discord.ext import commands
 # =====================================================================
 
 # Fetches your token securely from Render's Environment Variables
-BOT_TOKEN = os.getenv("BOT_TOKEN", "MTU2NjgwNzcwMjA5OTg1MzMyMQ.GPBsbn.oz7fjNMgdIrz3k93SbRDn0dCkEIZc5N5nFQBaw")
+BOT_TOKEN = os.getenv("BOT_TOKEN")
 
 # Your Staff Role ID (1567026563369664590)
 STAFF_ROLE_IDS = [1567026563369664590]
@@ -332,7 +333,7 @@ class TicketBot(commands.Bot):
 
     async def setup_hook(self):
         self.add_view(TicketPanelView())
-        self.add_view(TicketControlGroup := TicketControlView())
+        self.add_view(TicketControlView())
         await self.tree.sync()
         # Start the web server concurrently so Render stays happy
         await start_web_server()
@@ -377,8 +378,9 @@ async def slash_panel(interaction: discord.Interaction):
     await interaction.response.send_message("✅ Ticket panel posted!", ephemeral=True)
 
 
-clean_token = BOT_TOKEN.strip()
-if not clean_token or clean_token == "MTU2NjgwNzcwMjA5OTg1MzMyMQ.GPBsbn.oz7fjNMgdIrz3k93SbRDn0dCkEIZc5N5nFQBaw":
-    print("❌ ERROR: You forgot to paste your Discord Bot Token on Line 10!")
+if not BOT_TOKEN:
+    print("❌ ERROR: BOT_TOKEN environment variable is missing on Render!")
 else:
-    bot.run(clean_token)
+    bot.run(BOT_TOKEN.strip())
+
+
