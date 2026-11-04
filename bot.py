@@ -9,16 +9,11 @@ from discord.ext import commands
 # 1. BOT CONFIGURATION
 # =====================================================================
 
-# Fetches your token securely from Render's Environment Variables
 BOT_TOKEN = os.getenv("BOT_TOKEN")
 
-# Your Staff Role ID (1567026563369664590)
 STAFF_ROLE_IDS = [1567026563369664590]
-
-# Your Ticket Category ID (1567026565483859991)
 TICKET_CATEGORY_ID = 1567026565483859991
 
-# Configuration for your 4 ticket buttons
 TICKET_TYPES = {
     "support": {
         "title": "General Support",
@@ -31,7 +26,7 @@ TICKET_TYPES = {
         "title": "Report a Member",
         "prefix": "report",
         "color": discord.Color.red(),
-        "welcome": "Please provide the **username/ID** of the member you are reporting, along with screenshots or evidence.",
+        "welcome": "Please provide the username/ID of the member you are reporting, along with screenshots or evidence.",
         "roles": STAFF_ROLE_IDS,
     },
     "appeal": {
@@ -56,9 +51,9 @@ TICKET_TYPES = {
 # =====================================================================
 
 async def handle_ping(request):
-    return web.Response(text="Bot is running!")
+    return web.Response(text="Bot is running and online!")
 
-async def start_web_server():
+async def run_web_server():
     app = web.Application()
     app.router.add_get("/", handle_ping)
     runner = web.AppRunner(app)
@@ -66,6 +61,7 @@ async def start_web_server():
     port = int(os.environ.get("PORT", 10000))
     site = web.TCPSite(runner, "0.0.0.0", port)
     await site.start()
+    print(f"🌐 Keep-alive web server successfully bound to port {port}")
 
 
 # =====================================================================
@@ -322,7 +318,7 @@ class TicketPanelView(discord.ui.View):
 
 
 # =====================================================================
-# 5. BOT SETUP & STARTUP
+# 5. BOT SETUP & CONCURRENT STARTUP
 # =====================================================================
 
 class TicketBot(commands.Bot):
@@ -335,8 +331,6 @@ class TicketBot(commands.Bot):
         self.add_view(TicketPanelView())
         self.add_view(TicketControlView())
         await self.tree.sync()
-        # Start the web server concurrently so Render stays happy
-        await start_web_server()
 
 
 bot = TicketBot()
@@ -378,9 +372,18 @@ async def slash_panel(interaction: discord.Interaction):
     await interaction.response.send_message("✅ Ticket panel posted!", ephemeral=True)
 
 
-if not BOT_TOKEN:
-    print("❌ ERROR: BOT_TOKEN environment variable is missing on Render!")
-else:
-    bot.run(BOT_TOKEN.strip())
+async def main():
+    if not BOT_TOKEN:
+        print("❌ ERROR: BOT_TOKEN environment variable is missing on Render!")
+        return
+
+    # Start the web server first so Render registers the port immediately
+    await run_web_server()
+    
+    # Then start the Discord bot concurrently
+    await bot.start(BOT_TOKEN.strip())
 
 
+if __name__ == "__main__":
+    asyncio.run(main())
+    
