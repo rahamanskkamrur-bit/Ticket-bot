@@ -12,7 +12,7 @@ from discord.ext import commands
 # Render will read this from your Environment Variables (Key: BOT_TOKEN)
 BOT_TOKEN = os.getenv("BOT_TOKEN", "").strip()
 
-STAFF_ROLE_IDS = [1567026563369664590]
+STAFF_ROLE_IDS = [1567026563206086711]
 TICKET_CATEGORY_ID = 1567026565483859991
 
 BOT_STATUS = "Starting up..."
